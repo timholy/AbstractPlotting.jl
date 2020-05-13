@@ -416,7 +416,10 @@ function plot!(plot::Annotations)
                 (text, startpos), color, tsize, alignment, rotation, justification, lineheight
             c = to_color(color)
             rot = to_rotation(rotation)
-            pos = layout_text(text, startpos, tsize, f, alignment, rot, model, justification, lineheight)
+            pos = layout_text(text, tsize, f, alignment, rot, model, justification, lineheight)
+
+            pos = [p .+ to_ndim(Point3f0, startpos, 0) for p in pos]
+
             print(io, text)
             n = length(pos)
             append!(combinedpos, pos)
