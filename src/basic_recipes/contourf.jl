@@ -5,24 +5,23 @@
     )
 end
 
+function _get_isoband_levels(levels::Int, mi, ma)
+    Float32.(LinRange(mi, ma, levels+1))
+end
+
+function _get_isoband_levels(levels::AbstractVector{<:Real}, mi, ma)
+    Float32.(levels)
+end
 
 function AbstractPlotting.plot!(c::Contourf{<:Tuple{Any, Any, Any}})
     xs, ys, zs = c[1:3]
 
     levels = lift(zs, c.levels) do zs, levels
-        mi, ma = extrema(zs)
-
-        return if levels isa Int
-            collect(LinRange(mi, ma, levels+1))
-        elseif levels isa AbstractVector
-            collect(levels)
-        else
-            error("$levels is an invalid level setting")
-        end
+        _get_isoband_levels(levels, extrema(zs)...)
     end
 
 
-    polynode = lift(xs, ys, zs, levels) do xs, ys, zs, levels
+    poly_and_colors = lift(xs, ys, zs, levels) do xs, ys, zs, levels
         lows, highs = levels[1:end-1], levels[2:end]
         isos = Isoband.isobands(xs, ys, zs, lows, highs)
 
@@ -31,41 +30,47 @@ function AbstractPlotting.plot!(c::Contourf{<:Tuple{Any, Any, Any}})
         allids = Int[]
 
         # TODO: this is ugly
-        polys = typeof(Polygon(rand(Point2f0, 3), [rand(Point2f0, 3)]))[]
-        # @show typeof(polys)
+        polys = Vector{typeof(Polygon(rand(Point2f0, 3), [rand(Point2f0, 3)]))}()
+        colors = Int[]
 
         foreach(enumerate(isos)) do (i, group)
 
             points = Point2f0.(group.x, group.y)
             polygroups = _group_polys(points, group.id)
 
-
-            # nv = length(allvertices)
-
             for polygroup in polygroups
 
                 outline = polygroup[1]
                 holes = polygroup[2:end]
 
-                # TODO this is horrible, fix needed in GeometryBasics for empty interiors
-                poly = GeometryBasics.Polygon(outline, isempty(holes) ? [rand(Point2f0, 0)] : holes)
+                poly = GeometryBasics.Polygon(outline, holes)
 
                 push!(polys, poly)
+                # use index as color. what about unequal levels, how should that be reflected in the color
+                push!(colors, i)
             end
+
         end
 
-        GeometryBasics.MultiPolygon(polys)
-
-        
-        # (allvertices, allfaces, allids)
+        GeometryBasics.MultiPolygon(polys), colors
     end
 
-    mesh!(c, polynode, shading = false,
-        colormap = c.colormap, color = 1:length(polynode[].polygons))
+    mesh!(c, @lift($poly_and_colors[1]),
+        shading = false,
+        colormap = c.colormap,
+        color = @lift($poly_and_colors[2]))
     c
 end
 
+"""
+    _group_polys(points, ids)
 
+Given a vector of polygon vertices, and one vector of group indices, which
+are assumed to be returned from the isoband algorithm, return
+a vector of groups, where each group has one outer polygon and zero or more
+inner polygons which are holes in the outer polygon. It is possible that one
+group has multiple outer polygons with multiple holes each.
+"""
 function _group_polys(points, ids)
 
     polys = [points[ids .== i] for i in unique(ids)]
@@ -95,9 +100,6 @@ function _group_polys(points, ids)
     # all polys have to be classified
     while !isempty(unclassified_polyindices)
         to_keep = ones(Bool, length(unclassified_polyindices))
-
-        # println("containment matrix")
-        # display(containment_matrix)
 
         # go over unclassifieds and find outer polygons in the remaining containment matrix
         for (ii, i) in enumerate(unclassified_polyindices)
