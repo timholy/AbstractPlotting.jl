@@ -196,6 +196,7 @@ makedocs(
             "basic-tutorial.md",
             "animation.md",
             "interaction.md",
+            "plotting_functions.md",
             "functions-overview.md",
         ],
         "Documentation" => [
