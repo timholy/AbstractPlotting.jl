@@ -1,3 +1,12 @@
+"""
+    contourf(xs, ys, zs; kwargs...)
+
+Plots a filled contour of the height information in `zs` at horizontal grid positions `xs`
+and vertical grid positions `ys`.
+
+## Attributes
+$(ATTRIBUTES)
+"""
 @recipe(Contourf) do scene
     Theme(
         levels = 10,
